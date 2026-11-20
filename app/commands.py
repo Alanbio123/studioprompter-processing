@@ -68,6 +68,11 @@ def voice_command(denoised: Path, output: Path) -> list[str]:
             '-c:a', 'aac', '-b:a', '192k', str(output)]
 
 
+def _still(image: Path) -> str:
+    """Imagem parada repetida para sempre, dentro do filtro (sem fila de quadros na entrada)."""
+    return f"movie='{image.as_posix()}',loop=loop=-1:size=1"
+
+
 def render_command(
     source: Path,
     output: Path,
@@ -78,8 +83,13 @@ def render_command(
     sharpen: bool,
     audio: Path | None,
 ) -> list[str]:
-    """Vídeo final: recorte → cor (LUT) → luz dividida (screen) → vinheta → nitidez; voz limpa."""
-    inputs = ['-i', str(source)]
+    """Vídeo final: recorte → cor (LUT) → luz dividida (screen) → vinheta → nitidez; voz limpa.
+
+    Feito para caber em 512 MB (Render grátis; medido ~210 MB em 1080×1920): decodificador com
+    1 thread, x264 com 2 e sem lookahead, e as imagens (luz/vinheta) pelo filtro `movie`+`loop`,
+    que só gera quadro quando pedido (como entrada `-loop 1` elas enchiam a fila de quadros).
+    """
+    inputs = ['-threads', '1', '-i', str(source)]
     next_input = 1
     chain = '[0:v]'
     steps = []
@@ -91,18 +101,15 @@ def render_command(
     current = 'c0'
     split = overlays.get('split')
     if split:
-        inputs += ['-loop', '1', '-i', str(split)]
-        graph.append(f'[{next_input}:v]format=gbrp[s]')
+        graph.append(f"{_still(split)},format=gbrp[s]")
         graph.append(f'[{current}]format=gbrp[cg]')
         graph.append('[cg][s]blend=all_mode=screen:shortest=1[c1]')
         current = 'c1'
-        next_input += 1
     vignette = overlays.get('vignette')
     if vignette:
-        inputs += ['-loop', '1', '-i', str(vignette)]
-        graph.append(f'[{current}][{next_input}:v]overlay=shortest=1:format=auto[c2]')
+        graph.append(f'{_still(vignette)}[vg]')
+        graph.append(f'[{current}][vg]overlay=shortest=1:format=auto[c2]')
         current = 'c2'
-        next_input += 1
     final = 'unsharp=5:5:0.8:5:5:0.0,format=yuv420p' if sharpen else 'format=yuv420p'
     graph.append(f'[{current}]{final}[v]')
 
@@ -114,12 +121,11 @@ def render_command(
     return [
         'ffmpeg', '-y', '-v', 'error', '-progress', 'pipe:1', '-nostats',
         *inputs,
-        # Poucas threads: cada thread do x264 guarda quadros 1080p (o Render grátis tem 512 MB).
         '-filter_complex_threads', '1',
         '-filter_complex', ';'.join(graph),
         '-map', '[v]', *audio_map,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
-        '-threads', '2', '-x264-params', 'rc-lookahead=10',
+        '-threads', '2', '-x264-params', 'rc-lookahead=0:sync-lookahead=0',
         '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
         '-movflags', '+faststart', '-shortest',
         str(output),
