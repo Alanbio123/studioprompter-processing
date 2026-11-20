@@ -13,8 +13,11 @@ WORKDIR /home/user/app
 
 # PyTorch só de CPU (menor) antes do DeepFilterNet. torchaudio < 2.1: o deepfilternet 0.5.6
 # ainda importa torchaudio.backend (removido na 2.1).
-RUN pip install --no-cache-dir --user torch==2.0.1 torchaudio==2.0.2 \
-      --index-url https://download.pytorch.org/whl/cpu
+# Só pacotes PRONTOS (PIP_ONLY_BINARY): sem isso o pip tentava compilar uma dependência e a
+# construção falhava. O índice do PyTorch é EXTRA: as outras dependências vêm do PyPI normal.
+ENV PIP_ONLY_BINARY=:all: PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir --user --upgrade pip \
+ && pip install --no-cache-dir --user torch==2.0.1+cpu torchaudio==2.0.2+cpu
 COPY --chown=user requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
