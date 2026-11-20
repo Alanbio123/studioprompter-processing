@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,6 +19,7 @@ CLEAN_AUDIO = 'clean.m4a'
 FINAL = 'final.mp4'
 
 _model = None
+log = logging.getLogger('uvicorn.error')
 
 
 def _deepfilternet():
@@ -32,7 +34,9 @@ def _deepfilternet():
 
 
 def _run(command: list[str]) -> None:
-    subprocess.run(command, check=True, capture_output=True)
+    result = subprocess.run(command, capture_output=True)
+    if result.returncode != 0:  # o fim do stderr do ffmpeg vai para o log com o erro
+        raise RuntimeError(result.stderr.decode('utf-8', 'replace')[-800:])
 
 
 def clean_voice(state: JobState, mode: str, *, mock: bool = False) -> None:
@@ -57,6 +61,7 @@ def clean_voice(state: JobState, mode: str, *, mock: bool = False) -> None:
         _run(commands.voice_command(folder / DENOISED, folder / CLEAN_AUDIO))
         stage.status, stage.progress = 'done', 1.0
     except Exception:  # noqa: BLE001 — o app só precisa saber que falhou
+        log.exception('limpeza da voz falhou')
         stage.status = 'failed'
 
 
@@ -104,4 +109,5 @@ def render_final(state: JobState, filter_id: str, format_id: str) -> None:
                 raise RuntimeError('ffmpeg falhou')
         stage.status, stage.progress = 'done', 1.0
     except Exception:  # noqa: BLE001
+        log.exception('vídeo final falhou')
         stage.status = 'failed'
