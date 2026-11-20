@@ -22,8 +22,11 @@ COPY --chown=user requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 COPY --chown=user app ./app
-# Baixa o modelo DeepFilterNet3 na construção (o 1º vídeo não espera o download).
-RUN python -c "from df.enhance import init_df; init_df()"
+# Tenta baixar o modelo DeepFilterNet3 já na construção (o 1º vídeo não espera o download).
+# Não derruba a construção: o app carrega o modelo sozinho na 1ª limpeza (app/pipeline.py).
+# Se falhar, o erro aparece no log com "AVISO DeepFilterNet".
+RUN python -c "from df.enhance import init_df; init_df()" \
+ || echo "AVISO DeepFilterNet: modelo não baixado na construção; será baixado na 1ª limpeza."
 
 EXPOSE 7860
 # Render (e outros) informam a porta em $PORT; sem ela (Hugging Face), 7860.
