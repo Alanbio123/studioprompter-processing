@@ -114,9 +114,12 @@ def render_command(
     return [
         'ffmpeg', '-y', '-v', 'error', '-progress', 'pipe:1', '-nostats',
         *inputs,
+        # Poucas threads: cada thread do x264 guarda quadros 1080p (o Render grátis tem 512 MB).
+        '-filter_complex_threads', '1',
         '-filter_complex', ';'.join(graph),
         '-map', '[v]', *audio_map,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        '-threads', '2', '-x264-params', 'rc-lookahead=10',
         '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
         '-movflags', '+faststart', '-shortest',
         str(output),

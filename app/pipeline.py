@@ -6,6 +6,7 @@ import json
 import logging
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from . import commands
@@ -18,19 +19,8 @@ DENOISED = 'denoised.wav'
 CLEAN_AUDIO = 'clean.m4a'
 FINAL = 'final.mp4'
 
-_model = None
 log = logging.getLogger('uvicorn.error')
-
-
-def _deepfilternet():
-    """Carrega o modelo uma vez só (demora alguns segundos na 1ª limpeza)."""
-    global _model
-    if _model is None:
-        from df.enhance import init_df
-
-        model, df_state, _ = init_df()
-        _model = (model, df_state)
-    return _model
+DENOISE_SCRIPT = Path(__file__).with_name('denoise.py')
 
 
 def _run(command: list[str]) -> None:
@@ -50,13 +40,9 @@ def clean_voice(state: JobState, mode: str, *, mock: bool = False) -> None:
         if mock:
             shutil.copyfile(folder / RAW_AUDIO, folder / DENOISED)
         else:
-            from df.enhance import enhance, load_audio, save_audio
-
-            model, df_state = _deepfilternet()
-            audio, _ = load_audio(str(folder / RAW_AUDIO), sr=df_state.sr())
             limit = commands.MODES[mode]
-            enhanced = enhance(model, df_state, audio, atten_lim_db=limit)
-            save_audio(str(folder / DENOISED), enhanced, df_state.sr())
+            _run([sys.executable, str(DENOISE_SCRIPT), str(folder / RAW_AUDIO), str(folder / DENOISED),
+                  'none' if limit is None else str(limit)])
         stage.progress = 0.8
         _run(commands.voice_command(folder / DENOISED, folder / CLEAN_AUDIO))
         stage.status, stage.progress = 'done', 1.0
