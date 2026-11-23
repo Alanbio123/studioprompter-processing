@@ -2,7 +2,8 @@
 
 - Cor: LUT 3D (.cube) em app/luts/ — o mesmo arquivo que a prévia do celular usa (assets/luts/).
   Os 5 LUTs são gerados por tools/luts.py; LUTs reais de cinema entram no mesmo lugar.
-- Luz: vinheta (preto translúcido, como o app desenha por cima) e luz dividida do Neon (modo screen).
+- Luz: luz dividida do Neon (modo screen) e vinheta (escurece × (1 − alpha)) — a MESMA conta do
+  shader da prévia (src/studio/lutShader.ts); tests/test_export.py confere bordas e cantos.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ def _hex_rgb(color: str) -> tuple[int, int, int]:
 def vignette_alpha(x: float, y: float, strength: float) -> float:
     """Escurecimento (0..strength) no ponto (x, y) normalizado: nada no centro, máximo nos cantos.
 
-    Igual ao RadialGradient do app: transparente até 55% do raio, `strength` no canto.
+    Igual ao shader do app: nada até 55% da meia diagonal (elipse do quadro), `strength` no canto.
     """
     dx, dy = x - 0.5, y - 0.5
     distance = (dx * dx + dy * dy) ** 0.5 / (0.5 * 2**0.5)  # 0 no centro, 1 no canto
