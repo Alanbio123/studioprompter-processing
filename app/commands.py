@@ -127,6 +127,8 @@ def render_command(
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
         '-threads', '2', '-x264-params', 'rc-lookahead=0:sync-lookahead=0',
         '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
-        '-movflags', '+faststart', '-shortest',
+        # Sem -shortest: com a voz limpa numa 2ª entrada ele enfileirava quadros (memória subia até
+        # ~730 MB e derrubava o Render). A voz sai do próprio vídeo, então as durações já batem.
+        '-movflags', '+faststart',
         str(output),
     ]
